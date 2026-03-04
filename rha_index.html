@@ -1,0 +1,223 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>РХАХТА — Нүүр</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="rha_auth.js"></script>
+<link rel="stylesheet" href="rha_shared.css">
+<style>
+body{overflow:auto}
+.page{padding:28px 24px;max-width:960px;margin:0 auto}
+
+.orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.18;animation:orbFloat 12s ease-in-out infinite}
+.orb1{width:500px;height:500px;background:#4bd6ff;top:-100px;left:-100px;animation-delay:0s}
+.orb2{width:400px;height:400px;background:#8b5bff;top:20%;right:-80px;animation-delay:-4s}
+.orb3{width:350px;height:350px;background:#3cffb2;bottom:-80px;left:30%;animation-delay:-8s}
+@keyframes orbFloat{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-40px) scale(1.05)}66%{transform:translate(-20px,30px) scale(.97)}}
+
+.hero{
+  position:relative;border-radius:24px;padding:36px 32px 28px;margin-bottom:24px;
+  background:linear-gradient(135deg,rgba(75,214,255,.12),rgba(139,91,255,.1));
+  border:1px solid rgba(75,214,255,.25);
+  box-shadow:0 0 0 1px rgba(255,255,255,.04),0 24px 64px rgba(0,0,0,.4);
+  backdrop-filter:blur(16px);overflow:hidden;animation:fadeUp .5s ease both;
+}
+[data-theme="light"] .hero{background:linear-gradient(135deg,rgba(0,68,187,.07),rgba(79,34,200,.06));border-color:rgba(0,68,187,.2);box-shadow:0 24px 64px rgba(20,40,100,.12)}
+.hero-glow{position:absolute;top:-60px;right:-60px;width:320px;height:320px;background:radial-gradient(circle,rgba(75,214,255,.22),transparent 70%);pointer-events:none;animation:pulse 4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.12)}}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;font-size:11px;font-weight:800;background:rgba(75,214,255,.12);border:1px solid rgba(75,214,255,.3);color:var(--accent);margin-bottom:14px;letter-spacing:.3px}
+.hero-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.hero-title{font-size:30px;font-weight:900;letter-spacing:-.5px;line-height:1.15;background:linear-gradient(135deg,var(--text) 40%,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+[data-theme="light"] .hero-title{background:linear-gradient(135deg,#080f22 40%,#0044bb);-webkit-background-clip:text;background-clip:text}
+.hero-sub{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.7;max-width:540px}
+.hero-stats{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap}
+.hstat{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);transition:all .2s}
+.hstat:hover{background:rgba(255,255,255,.1);transform:translateY(-2px)}
+[data-theme="light"] .hstat{background:rgba(255,255,255,.7);border-color:rgba(20,40,100,.15)}
+.hstat-icon{font-size:18px}
+.hstat-val{font-size:18px;font-weight:900;color:var(--accent);line-height:1}
+.hstat-lbl{font-size:10px;color:var(--muted);margin-top:2px}
+
+.section-title{font-size:11px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:700px){.grid,.grid2{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.grid,.grid2{grid-template-columns:1fr}}
+
+.card{
+  display:flex;flex-direction:column;position:relative;overflow:hidden;
+  border:1px solid var(--border);border-radius:18px;
+  background:rgba(255,255,255,.05);padding:22px;
+  text-decoration:none;color:var(--text);
+  transition:all .22s cubic-bezier(.25,.8,.25,1);cursor:pointer;
+  animation:fadeUp .5s ease both;
+}
+[data-theme="light"] .card{background:rgba(255,255,255,.78)}
+.card::after{content:'';position:absolute;inset:0;border-radius:18px;opacity:0;background:linear-gradient(135deg,rgba(75,214,255,.08),rgba(139,91,255,.06));transition:opacity .2s;pointer-events:none}
+.card:hover{border-color:rgba(75,214,255,.5);transform:translateY(-5px);box-shadow:0 20px 50px rgba(0,0,0,.35),0 0 0 1px rgba(75,214,255,.12)}
+[data-theme="light"] .card:hover{box-shadow:0 20px 50px rgba(20,40,100,.18)}
+.card:hover::after{opacity:1}
+.card:nth-child(1){animation-delay:.06s}.card:nth-child(2){animation-delay:.12s}.card:nth-child(3){animation-delay:.18s}.card:nth-child(4){animation-delay:.24s}.card:nth-child(5){animation-delay:.3s}
+
+.card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.card-icon-wrap{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:22px;flex-shrink:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);transition:transform .25s ease}
+[data-theme="light"] .card-icon-wrap{background:rgba(20,40,100,.06);border-color:rgba(20,40,100,.1)}
+.card:hover .card-icon-wrap{transform:scale(1.12) rotate(-6deg)}
+.cbadge{font-size:9px;font-weight:900;padding:3px 9px;border-radius:99px;letter-spacing:.4px}
+.cb-blue{background:rgba(75,214,255,.12);color:var(--accent);border:1px solid rgba(75,214,255,.28)}
+.cb-green{background:rgba(60,255,178,.1);color:var(--ok);border:1px solid rgba(60,255,178,.28)}
+.cb-purple{background:rgba(139,91,255,.12);color:#c49fff;border:1px solid rgba(139,91,255,.28)}
+[data-theme="light"] .cb-blue{background:rgba(0,68,187,.08);color:#0044bb;border-color:rgba(0,68,187,.22)}
+[data-theme="light"] .cb-green{background:rgba(6,114,63,.08);color:#06723f;border-color:rgba(6,114,63,.22)}
+[data-theme="light"] .cb-purple{background:rgba(79,34,200,.08);color:#4f22c8;border-color:rgba(79,34,200,.22)}
+
+.card-title{font-size:15px;font-weight:900;margin-bottom:7px}
+.card-desc{font-size:11px;color:var(--muted);line-height:1.7;flex:1}
+.card-footer{margin-top:18px;display:flex;align-items:center;justify-content:space-between}
+.card-arrow{font-size:11px;font-weight:900;color:var(--accent);display:flex;align-items:center;gap:5px;transition:gap .2s}
+.card:hover .card-arrow{gap:10px}
+.card-tag{font-size:10px;color:var(--muted);font-family:var(--mono);opacity:.7}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body data-theme="dark">
+<div class="orbs"><div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div></div>
+<div class="app" style="position:relative;z-index:1">
+<div class="topbar">
+  <a href="rha_index.html" class="brand" style="text-decoration:none;cursor:pointer">
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/salbar_logo/logo.png" style="height:36px;width:auto;object-fit:contain;border-radius:6px" alt="Салбар лого"/>
+    <div style="width:1px;height:28px;background:var(--border);flex-shrink:0"></div>
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/alba_logo/Logo.jpg" style="height:32px;width:auto;object-fit:contain;border-radius:4px" alt="Алба лого"/>
+    <div class="brand-text" style="margin-left:4px"><b>РХАХТА</b><span>Stations · Settings</span></div>
+  </a>
+  <nav class="nav">
+    <a href="rha_tavil.html">Тавилын карт</a>
+    <a href="rha_rh_sudalgaa.html">Реле судалгаа</a>
+    <a href="rha_alban_bichig.html">Албан бичиг</a>
+    <a href="rha_station_schema.html">Схем (PDF)</a>
+    <a href="rha_login.html">Login</a>
+  </nav>
+  <div class="topbar-right">
+    <div class="conn-chip"><span class="conn-dot ok"></span><span>Системд холбогдсон</span></div>
+    <button class="btn" onclick="toggleTheme()">🌓</button>
+  </div>
+</div>
+
+<div style="flex:1;overflow:auto">
+<div class="page">
+
+  <div class="hero">
+    <div class="hero-glow"></div>
+    <div class="hero-badge">⚡ РХАХТА систем — онлайн</div>
+    <div class="hero-title">РХАХТА-ны нэгдсэн<br>мэдээллийн сан</div>
+    <div class="hero-sub">Станцын схем, тавилын карт, релены судалгаа болон албан бичгүүдийг нэг дороос хянах систем.</div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hstat-icon">🏭</div><div><div class="hstat-val" id="stCount">…</div><div class="hstat-lbl">Станц</div></div></div>
+      <div class="hstat"><div class="hstat-icon">📄</div><div><div class="hstat-val" id="docCount">…</div><div class="hstat-lbl">Албан бичиг</div></div></div>
+      <div class="hstat"><div class="hstat-icon">🗺️</div><div><div class="hstat-val" id="schCount">…</div><div class="hstat-lbl">Схем</div></div></div>
+      <div class="hstat"><div class="hstat-icon">🛡️</div><div><div class="hstat-val" id="rhCount">…</div><div class="hstat-lbl">Реле</div></div></div>
+    </div>
+  </div>
+
+  <!-- About section -->
+  <div class="section-title">Албаны товч танилцуулга</div>
+  <div style="border:1px solid var(--border);border-radius:20px;background:rgba(255,255,255,.04);padding:24px 28px;margin-bottom:24px;animation:fadeUp .5s ease both;animation-delay:.1s">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <div style="font-size:13px;font-weight:900;color:var(--accent);margin-bottom:10px;letter-spacing:.3px">⚡ РЕЛЕ ХАМГААЛАЛТ АВТОМАТИК ХЭМЖИЛТ ТУРШИЛТЫН АЛБА</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:14px">ЦДҮС ТӨХК-ын Улаанбаатар салбарын харьяа <b style="color:var(--text)">38 дэд станцын</b> дараах чиглэлийн ажлыг хариуцан ажилладаг:</div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted)"><span style="color:var(--accent);flex-shrink:0">▸</span>Реле хамгаалалт автоматик, хоёрдогч хэлхээ</div>
+          <div style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted)"><span style="color:var(--accent);flex-shrink:0">▸</span>Хэмжүүр тоолуур, бүх төрлийн хэмжих хэрэгсэл</div>
+          <div style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted)"><span style="color:var(--accent);flex-shrink:0">▸</span>Өндөр хүчдлийн туршилт хэмжилт</div>
+          <div style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted)"><span style="color:var(--accent);flex-shrink:0">▸</span>HMI сүлжээ, СКАДА, хяналт удирдлагын сүлжээ</div>
+          <div style="display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted)"><span style="color:var(--accent);flex-shrink:0">▸</span>Дэд станцын тогтмол гүйдлийн үүсгүүр, аккумляторын байгууламжийн засвар үйлчилгээ, үзлэг шалгалт, хэвийн найдвартай ажиллагааг хангах</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:11px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px">📋 Сүүлийн мэдээлэл</div>
+        <div style="padding:12px 14px;border-radius:14px;border:1px solid rgba(75,214,255,.2);background:rgba(75,214,255,.05)">
+          <div style="font-size:11px;font-weight:900;color:var(--accent);margin-bottom:4px">А/119 тоот тушаал — 06/27</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">Гүйцэтгэх захирлын тушаалаар <b style="color:var(--text)">2 орон тоо</b> нэмэлтээр батлагдаж, хяналт удирдлагын систем хариуцсан <b style="color:var(--text)">2 инженер хэсэгтэй</b> болов:</div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
+            <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0;box-shadow:0 0 6px var(--ok)"></span>Автоматикийн удирдлагын системийн инженер</div>
+            <div style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px"><span style="width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0;box-shadow:0 0 6px var(--ok)"></span>Автоматикийн өгөгдлийн инженер</div>
+          </div>
+        </div>
+        <div style="padding:12px 14px;border-radius:14px;border:1px solid rgba(245,166,35,.2);background:rgba(245,166,35,.05)">
+          <div style="font-size:11px;font-weight:900;color:var(--warn);margin-bottom:4px">🔔 Чөлөөнд</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">РХА монтёр <b style="color:var(--text)">Б.Болортуул</b> — хүүхэд асрах чөлөөнд байна.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Үндсэн модулиуд</div>
+  <div class="grid">
+    <a class="card" href="rha_tavil.html">
+      <div class="card-header"><div class="card-icon-wrap">⚙️</div><span class="cbadge cb-blue">ЗАСАХ</span></div>
+      <div class="card-title">Тавилын карт</div>
+      <div class="card-desc">РХ тоноглолын тавилын параметрүүдийг харах, засах, хадгалах.</div>
+      <div class="card-footer"><span class="card-arrow">НЭЭХ →</span><span class="card-tag">tavil</span></div>
+    </a>
+    <a class="card" href="rha_rh_sudalgaa.html">
+      <div class="card-header"><div class="card-icon-wrap">🛡️</div><span class="cbadge cb-green">ХАРАХ</span></div>
+      <div class="card-title">Реле судалгаа</div>
+      <div class="card-desc">Станц бүрийн реле хамгаалалтын судалгааг харах, шүүх, CSV татах.</div>
+      <div class="card-footer"><span class="card-arrow">НЭЭХ →</span><span class="card-tag">v_rh</span></div>
+    </a>
+    <a class="card" href="rha_alban_bichig.html">
+      <div class="card-header"><div class="card-icon-wrap">📄</div><span class="cbadge cb-purple">PDF</span></div>
+      <div class="card-title">Албан бичиг</div>
+      <div class="card-desc">Жил, фолдерээр ангилсан PDF албан бичгүүдийг хайх, нээх, татах.</div>
+      <div class="card-footer"><span class="card-arrow">НЭЭХ →</span><span class="card-tag">alban_bichig</span></div>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:8px">Нэмэлт</div>
+  <div class="grid2">
+    <a class="card" href="rha_station_schema.html">
+      <div class="card-header"><div class="card-icon-wrap">🗺️</div><span class="cbadge cb-blue">PDF</span></div>
+      <div class="card-title">Станцын схем</div>
+      <div class="card-desc">Topology, зарчмын схем болон РХ-н схем PDF-ийг харах, шинэ PDF оруулах.</div>
+      <div class="card-footer"><span class="card-arrow">НЭЭХ →</span><span class="card-tag">station_schemas</span></div>
+    </a>
+    <a class="card" href="rha_login.html">
+      <div class="card-header"><div class="card-icon-wrap">🔐</div><span class="cbadge cb-green">AUTH</span></div>
+      <div class="card-title">Нэвтрэх / Гарах</div>
+      <div class="card-desc">Supabase Auth ашиглан нэвтрэх. Admin, Editor, Viewer эрхийн удирдлага.</div>
+      <div class="card-footer"><span class="card-arrow">НЭЭХ →</span><span class="card-tag">auth</span></div>
+    </a>
+  </div>
+
+</div>
+</div>
+</div>
+
+<script>
+const SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+const SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+(async()=>{
+  try{
+    const[st,doc,sch,rh]=await Promise.all([
+      sb.from('stations').select('id',{count:'exact',head:true}),
+      sb.from('alban_bichig').select('id',{count:'exact',head:true}),
+      sb.from('station_schemas').select('id',{count:'exact',head:true}),
+      sb.from('v_rh').select('*',{count:'exact',head:true}),
+    ]);
+    const fmt=n=>n!=null?String(n):'—';
+    document.getElementById('stCount').textContent=fmt(st.count);
+    document.getElementById('docCount').textContent=fmt(doc.count);
+    document.getElementById('schCount').textContent=fmt(sch.count);
+    document.getElementById('rhCount').textContent=fmt(rh.count);
+  }catch(e){}
+})();
+function toggleTheme(){const b=document.body,t=b.getAttribute('data-theme')==='dark'?'light':'dark';b.setAttribute('data-theme',t);try{localStorage.setItem('rha_theme',t)}catch(e){}}
+(function(){try{const t=localStorage.getItem('rha_theme');if(t)document.body.setAttribute('data-theme',t)}catch(e){}})();
+</script>
+</body></html>

@@ -1,0 +1,241 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>РХАХТА — Тавилын карт</title>
+<link rel="stylesheet" href="rha_shared.css">
+<style>
+.edit-input{width:110px;background:rgba(75,214,255,.05);border:1px solid var(--accent);border-radius:8px;padding:4px 8px;color:var(--ok);font-family:var(--mono);font-size:12px;outline:none;transition:border-color .12s}
+.edit-input:focus{box-shadow:var(--ring)}
+.unsaved-badge{display:none;background:rgba(245,166,35,.12);border:1px solid var(--warn);color:var(--warn);padding:3px 9px;border-radius:999px;font-size:10px;font-weight:900}
+.unsaved-badge.visible{display:inline-flex;align-items:center}
+.equip-multiselect{position:relative;min-width:160px}
+.equip-multiselect-btn{width:100%;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:8px 26px 8px 12px;color:var(--text);font-family:var(--font);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-weight:700;position:relative}
+.equip-multiselect-btn:hover{border-color:rgba(75,214,255,.4)}
+.equip-multiselect-btn::after{content:'▾';position:absolute;right:9px;font-size:9px;color:var(--muted)}
+.equip-multiselect-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg0);border:1px solid var(--border);border-radius:14px;max-height:260px;overflow-y:auto;z-index:50;box-shadow:var(--shadow)}
+.equip-multiselect.open .equip-multiselect-dropdown{display:block}
+.equip-multiselect-item{padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;border-radius:8px;margin:3px;transition:background .1s}
+.equip-multiselect-item:hover{background:rgba(75,214,255,.07)}
+.equip-multiselect-item input{accent-color:var(--accent);cursor:pointer}
+.volt-modal-backdrop{position:fixed;inset:0;background:rgba(7,10,18,.85);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(4px)}
+.volt-modal-backdrop.open{display:flex}
+.volt-modal{width:340px;max-width:95%;background:var(--bg1);border-radius:20px;border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
+.volt-modal-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:900}
+.volt-modal-body{max-height:240px;overflow-y:auto;padding:10px 14px}
+.volt-item{display:flex;align-items:center;gap:8px;padding:7px 8px;font-size:12px;cursor:pointer;border-radius:9px;transition:background .1s}
+.volt-item:hover{background:rgba(75,214,255,.07)}
+.volt-item span{color:var(--text)}
+.volt-modal-footer{padding:10px 14px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+<div class="topbar">
+  <a href="rha_index.html" class="brand" style="text-decoration:none;cursor:pointer">
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/salbar_logo/logo.png" style="height:36px;width:auto;object-fit:contain;border-radius:6px" alt="Салбар лого"/>
+    <div style="width:1px;height:28px;background:var(--border);flex-shrink:0"></div>
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/alba_logo/Logo.jpg" style="height:32px;width:auto;object-fit:contain;border-radius:4px" alt="Алба лого"/>
+    <div class="brand-text" style="margin-left:4px"><b>РХАХТА</b><span>Stations · Settings</span></div>
+  </a>
+  <nav class="nav">
+    <a href="rha_tavil.html" class="active">Тавилын карт</a>
+    <a href="rha_rh_sudalgaa.html">Реле судалгаа</a>
+    <a href="rha_alban_bichig.html">Албан бичиг</a>
+    <a href="rha_station_schema.html">Схем (PDF)</a>
+    <a href="rha_login.html">Login</a>
+  </nav>
+  <div class="topbar-right">
+    <div class="conn-chip"><span class="conn-dot" id="conn-dot"></span><span id="conn-text">Холбогдож байна…</span></div>
+    <button class="btn" onclick="toggleTheme()">🌓</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="search-box" id="station-search" placeholder="🔍  Станц хайх..." type="text">
+    </div>
+    <div class="station-list" id="station-list">
+      <div class="center-msg" style="height:180px"><div class="loading-bar"></div><p style="font-size:12px">Уншиж байна...</p></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar2">
+      <div>
+        <div class="main-title" id="main-title">Станц сонгоно уу</div>
+        <div class="main-meta" id="main-meta">← Зүүн талаас сонгоно уу</div>
+      </div>
+      <div class="topbar2-right">
+        <span class="unsaved-badge" id="unsaved-badge">● Хадгалаагүй</span>
+        <div class="equip-multiselect" id="prot-filter-wrap">
+          <button type="button" class="equip-multiselect-btn" id="prot-filter-btn">Бүх хамгаалалт</button>
+          <div class="equip-multiselect-dropdown" id="prot-filter-dropdown"></div>
+        </div>
+        <div class="equip-multiselect" id="equip-filter-wrap">
+          <button type="button" class="equip-multiselect-btn" id="equip-filter-btn">Бүх тоноглол</button>
+          <div class="equip-multiselect-dropdown" id="equip-filter-dropdown"></div>
+        </div>
+        <button class="btn" type="button" onclick="openVoltModal()">Хүчдлийн түвшин</button>
+        <button class="btn" onclick="exportCSV()">⬇ CSV</button>
+        <button class="btn btn-save" id="save-btn" onclick="saveChanges()" style="display:none">💾 Хадгалах</button>
+        <button class="btn btn-primary" onclick="refreshData()">↻</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div style="font-size:16px">⚙️</div><div><div class="stat-val" id="st-equip">—</div><div class="stat-label">Тоноглол</div></div></div>
+      <div class="stat-card"><div style="font-size:16px">🛡️</div><div><div class="stat-val" id="st-prot">—</div><div class="stat-label">Хамгаалалт</div></div></div>
+      <div class="stat-card"><div style="font-size:16px">📋</div><div><div class="stat-val" id="st-params">—</div><div class="stat-label">Параметр</div></div></div>
+      <div class="stat-card"><div style="font-size:16px">🏢</div><div><div class="stat-val" id="st-total">—</div><div class="stat-label">Нийт станц</div></div></div>
+    </div>
+
+    <div class="table-area" id="table-area">
+      <div class="center-msg"><div class="c-icon">⚡</div><p>Станц сонгоод тавилын карт харна уу</p></div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="volt-modal-backdrop" id="volt-modal">
+  <div class="volt-modal">
+    <div class="volt-modal-header">
+      <span>Хүчдлийн түвшингээр шүүх</span>
+      <button class="btn" type="button" onclick="closeVoltModal()" style="padding:6px 10px">✕</button>
+    </div>
+    <div class="volt-modal-body" id="volt-modal-body"></div>
+    <div class="volt-modal-footer">
+      <button class="btn" type="button" onclick="clearVoltFilter()">Цэвэрлэх</button>
+      <button class="btn btn-primary" type="button" onclick="applyVoltModal()">Хадгалах</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="rha_auth.js"></script>
+<script>
+var SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+var SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+var sb=supabase.createClient(SB_URL,SB_KEY);
+let allStations=[],currentStation=null,currentStationId=null,rawData=[],filteredData=[],pendingEdits={};
+let selectedEquips=new Set(),selectedProts=new Set(),selectedVolts=new Set();
+async function init(){
+  try{
+    const{error:e}=await sb.from('stations').select('id').limit(1);if(e)throw new Error(e.message);
+    setConn(true);
+    const{data:stData,error:stErr}=await sb.from('stations').select('id,name').order('name');if(stErr)throw new Error(stErr.message);
+    const col=new Intl.Collator('mn',{sensitivity:'base',numeric:true});
+    allStations=(stData||[]).map(r=>({id:r.id,name:r.name,equips:'—'})).sort((a,b)=>col.compare(a.name||'',b.name||''));
+    renderSidebar(allStations);document.getElementById('st-total').textContent=allStations.length;
+    toast('✅ Холбогдлоо!','success');
+  }catch(e){setConn(false);toast('❌ '+e.message,'error');}
+}
+function setConn(ok){const d=document.getElementById('conn-dot'),t=document.getElementById('conn-text');if(d)d.className='conn-dot'+(ok?' ok':' bad');if(t)t.textContent=ok?'Supabase — Холбогдсон':'Холболт алдаа';}
+const ICONS=['⚡','🔌','🏭','⚙️','🔋','📡','🔧','💡','🔩','⚗️'];
+function renderSidebar(stations){
+  const el=document.getElementById('station-list');
+  if(!stations.length){el.innerHTML='<div class="center-msg" style="height:80px"><p>Олдсонгүй</p></div>';return;}
+  el.innerHTML=stations.map((s,i)=>`<div class="station-item ${currentStation===s.name?'active':''}" data-id="${s.id}" data-name="${esc(s.name)}"><div class="s-icon">${ICONS[i%ICONS.length]}</div><div class="s-name">${esc(s.name)}</div><div class="s-count">${s.equips}</div></div>`).join('');
+  el.querySelectorAll('.station-item').forEach(item=>item.addEventListener('click',()=>selectStation(item.dataset.id,item.dataset.name)));
+}
+function esc(s=''){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
+function normalizeCtText(v){if(v===null||v===undefined)return '';const raw=Array.isArray(v)?v.join(' '):String(v);let s=raw.trim();if(!s)return '';s=s.replace(/[,]+/g,' ').replace(/\s+/g,' ');const parts=s.split(' ').filter(Boolean);if(parts.length<=1)return s;const uniq=[];for(const p of parts)if(!uniq.includes(p))uniq.push(p);return(uniq.length===1)?uniq[0]:uniq.join(' ');}
+function formatTs(ts){if(!ts)return '';return String(ts).slice(0,19).replace('T',' ');}
+function normalizeHistory(arr){const list=Array.isArray(arr)?arr.filter(Boolean):[];list.sort((a,b)=>{const at=a?.ts?Date.parse(a.ts):0,bt=b?.ts?Date.parse(b.ts):0;return bt-at;});const seen=new Set(),out=[];for(const h of list){const v=(h?.value_num!==null&&h?.value_num!==undefined)?`n:${h.value_num}`:`t:${h?.value_text??''}`;const k=`${v}|${h?.ts??''}`;if(seen.has(k))continue;seen.add(k);out.push(h);if(out.length>=2)break;}return out;}
+function openVoltModal(){if(!rawData.length)return;const modal=document.getElementById('volt-modal'),body=document.getElementById('volt-modal-body');const volts=Array.from(new Set(rawData.map(r=>r.voltage_kv).filter(v=>v!==null&&v!==undefined&&v!==''))).sort((a,b)=>Number(a)-Number(b));body.innerHTML=!volts.length?'<div class="volt-item">Хүчдлийн түвшин алга</div>':volts.map(v=>{const key=String(v),checked=selectedVolts.has(key)?'checked':'';return`<label class="volt-item"><input type="checkbox" value="${key}" ${checked}><span>${key} кВ</span></label>`;}).join('');body.querySelectorAll('input[type="checkbox"]').forEach(cb=>cb.addEventListener('change',()=>{if(cb.checked)selectedVolts.add(cb.value);else selectedVolts.delete(cb.value);}));modal.classList.add('open');}
+function closeVoltModal(){document.getElementById('volt-modal').classList.remove('open');}
+function clearVoltFilter(){selectedVolts.clear();closeVoltModal();applyFilters();}
+function applyVoltModal(){closeVoltModal();applyFilters();}
+async function selectStation(stationId,stationName){
+  if(Object.keys(pendingEdits).length>0){if(!confirm('Хадгалаагүй өөрчлөлт байна. Үргэлжлүүлэх үү?'))return;pendingEdits={};updateUnsaved();}
+  currentStation=stationName;currentStationId=stationId;
+  document.querySelectorAll('.station-item').forEach(el=>el.classList.toggle('active',el.dataset.id===stationId));
+  document.getElementById('main-title').textContent=stationName;
+  selectedEquips.clear();selectedProts.clear();selectedVolts.clear();
+  document.getElementById('equip-filter-dropdown').innerHTML='';document.getElementById('equip-filter-btn').textContent='Бүх тоноглол';
+  document.getElementById('prot-filter-dropdown').innerHTML='';document.getElementById('prot-filter-btn').textContent='Бүх хамгаалалт';
+  document.getElementById('table-area').innerHTML='<div class="center-msg"><div class="loading-bar"></div><p>Уншиж байна...</p></div>';
+  try{
+    const{data,error}=await sb.from('settings').select(`id,stage,value_num,value_text,updated_at,updated_by,history,assets!inner(id,name,asset_type,voltage_kv,ct_ratio,station_id),protection_functions!inner(code,name),function_parameters!inner(param_code,unit,description)`).eq('assets.station_id',stationId).order('name',{foreignTable:'assets',ascending:true}).order('code',{foreignTable:'protection_functions',ascending:true}).order('param_code',{foreignTable:'function_parameters',ascending:true}).order('stage',{ascending:true});
+    if(error)throw new Error(error.message);
+    rawData=(data||[]).map(r=>({settings_id:r.id,equipment_name:r.assets?.name||'—',equipment_type:r.assets?.asset_type||'',voltage_kv:r.assets?.voltage_kv??null,ct_text:normalizeCtText(r.assets?.ct_ratio)||'—',func_code:r.protection_functions?.code||'',func_name:r.protection_functions?.name||'',stage:r.stage??'',param_code:r.function_parameters?.param_code||'',unit:r.function_parameters?.unit||'',value_num:r.value_num??null,value_text:r.value_text??null,updated_at:r.updated_at??null,value_display:(r.value_num!==null&&r.value_num!==undefined)?String(r.value_num):(r.value_text??''),history:normalizeHistory(r.history)}));
+    const equips=new Set(rawData.map(r=>r.equipment_name)),prots=new Set(rawData.map(r=>r.func_code).filter(Boolean));
+    document.getElementById('st-equip').textContent=equips.size;document.getElementById('st-prot').textContent=prots.size;document.getElementById('st-params').textContent=rawData.length;
+    document.getElementById('main-meta').textContent=`${equips.size} тоноглол · ${rawData.length} тавилын утга`;
+    const col=new Intl.Collator('mn',{sensitivity:'base'});
+    const eqList=[...equips].sort((a,b)=>col.compare(a,b));
+    const dropEl=document.getElementById('equip-filter-dropdown');
+    dropEl.innerHTML=eqList.map(e=>`<label class="equip-multiselect-item"><input type="checkbox" value="${esc(e)}"><span>${esc(e)}</span></label>`).join('');
+    dropEl.querySelectorAll('input').forEach(cb=>cb.addEventListener('change',()=>{if(cb.checked)selectedEquips.add(cb.value);else selectedEquips.delete(cb.value);updateEquipFilterLabel();applyFilters();}));
+    const protList=[...prots].sort((a,b)=>col.compare(a,b));
+    const protDrop=document.getElementById('prot-filter-dropdown');
+    protDrop.innerHTML=protList.map(p=>`<label class="equip-multiselect-item"><input type="checkbox" value="${esc(p)}"><span>${esc(p)}</span></label>`).join('');
+    protDrop.querySelectorAll('input').forEach(cb=>cb.addEventListener('change',()=>{if(cb.checked)selectedProts.add(cb.value);else selectedProts.delete(cb.value);updateProtFilterLabel();applyFilters();}));
+    applyFilters();
+  }catch(e){document.getElementById('table-area').innerHTML=`<div class="center-msg"><div class="c-icon">⚠️</div><p>${esc(e.message)}</p></div>`;}
+}
+document.getElementById('equip-filter-btn').addEventListener('click',e=>{e.stopPropagation();document.getElementById('equip-filter-wrap').classList.toggle('open');});
+document.getElementById('equip-filter-wrap').addEventListener('click',e=>e.stopPropagation());
+document.getElementById('prot-filter-btn').addEventListener('click',e=>{e.stopPropagation();document.getElementById('prot-filter-wrap').classList.toggle('open');});
+document.getElementById('prot-filter-wrap').addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>{document.getElementById('equip-filter-wrap').classList.remove('open');document.getElementById('prot-filter-wrap').classList.remove('open');});
+function updateEquipFilterLabel(){document.getElementById('equip-filter-btn').textContent=selectedEquips.size===0?'Бүх тоноглол':`${selectedEquips.size} сонгосон`;}
+function updateProtFilterLabel(){document.getElementById('prot-filter-btn').textContent=selectedProts.size===0?'Бүх хамгаалалт':`${selectedProts.size} хамгаалалт`;}
+function applyFilters(){filteredData=rawData.filter(r=>{const eqOk=selectedEquips.size===0||selectedEquips.has(r.equipment_name||'');const protOk=selectedProts.size===0||selectedProts.has(r.func_code||'');const voltKey=r.voltage_kv===null||r.voltage_kv===undefined?'':String(r.voltage_kv);const voltOk=selectedVolts.size===0||selectedVolts.has(voltKey);return eqOk&&protOk&&voltOk;});renderTableExcel(filteredData);}
+function renderTableExcel(data){
+  if(!data.length){document.getElementById('table-area').innerHTML='<div class="center-msg"><div class="c-icon">📭</div><p>Өгөгдөл байхгүй</p></div>';return;}
+  const eqOrder=[],eqMap={};
+  data.forEach(r=>{const eq=r.equipment_name||'—';if(!eqMap[eq]){eqMap[eq]=[];eqOrder.push(eq);}eqMap[eq].push(r);});
+  let html=`<table><thead><tr><th style="width:44px">ДД</th><th style="width:220px">Тоноглолын нэр</th><th style="width:100px">Кт</th><th style="width:150px">Хамгаалалтын функц</th><th style="width:65px">Шатлал</th><th style="width:160px">Параметр</th><th style="width:115px">Тавил</th><th style="width:110px">Огноо</th><th style="width:80px">Нэгж</th><th style="width:140px">Өмнөх 1</th><th style="width:140px">Өмнөх 2</th></tr></thead><tbody>`;
+  let dd=1;
+  eqOrder.forEach(eq=>{
+    const rows=eqMap[eq],funcOrder=[],funcMap={};
+    rows.forEach(r=>{const fn=r.func_code||'—';if(!funcMap[fn]){funcMap[fn]=[];funcOrder.push(fn);}funcMap[fn].push(r);});
+    const eqRowspan=funcOrder.reduce((sum,fn)=>sum+funcMap[fn].length,0);let eqPrinted=false;
+    funcOrder.forEach(fn=>{
+      const frows=funcMap[fn],fnRowspan=frows.length;let fnPrinted=false;
+      frows.forEach(r=>{
+        const id=r.settings_id,display=r.value_display??'',inputVal=pendingEdits[id]!==undefined?pendingEdits[id]:display;
+        const h=normalizeHistory(r.history),h1=h[0]?histToText(h[0]):'',h2=h[1]?histToText(h[1]):'';
+        html+=`<tr data-id="${id}">`;
+        if(!eqPrinted){html+=`<td rowspan="${eqRowspan}"><div class="td-inner">${dd}</div></td><td rowspan="${eqRowspan}"><div class="td-inner" style="font-weight:700;color:#fff">${esc(eq)}</div><div class="td-inner" style="color:var(--muted);font-size:10px">${esc(r.equipment_type||'')}</div></td><td rowspan="${eqRowspan}"><div class="td-inner">${esc(r.ct_text||'—')}</div></td>`;eqPrinted=true;dd++;}
+        if(!fnPrinted){html+=`<td rowspan="${fnRowspan}"><div class="td-inner" style="font-weight:800">${esc(fn)}</div>${r.func_name?`<div class="td-inner" style="color:var(--muted);font-size:10px">${esc(r.func_name)}</div>`:''}</td>`;fnPrinted=true;}
+        html+=`<td><div class="td-inner">${esc(String(r.stage??''))}</div></td><td><div class="td-inner">${esc(r.param_code||'—')}</div></td>`;
+        html+=`<td><div class="td-inner"><input class="edit-input" value="${esc(String(inputVal)).replace(/"/g,'&quot;')}" data-orig="${esc(String(display)).replace(/"/g,'&quot;')}" data-id="${id}" onchange="onEdit(this)" onfocus="this.select()"></div></td>`;
+        const d0=r.updated_at?String(r.updated_at).slice(0,10):'';
+        html+=`<td><div class="td-inner">${d0?'/'+d0+'/':''}</div></td><td><div class="td-inner">${r.unit?esc(r.unit):''}</div></td><td><div class="td-inner">${esc(h1)}</div></td><td><div class="td-inner">${esc(h2)}</div></td></tr>`;
+      });
+    });
+  });
+  html+=`</tbody></table>`;
+  document.getElementById('table-area').innerHTML=html;
+}
+function histToText(h){const raw=(h.value_num!==null&&h.value_num!==undefined)?String(h.value_num):String(h.value_text??'');const v=raw.trim()?raw.trim():'—';const ts=formatTs(h.ts);return ts?`${v} · ${ts}`:v;}
+function onEdit(input){const id=input.dataset.id,orig=(input.dataset.orig??'').trim(),newVal=(input.value??'').trim();if(newVal===orig)delete pendingEdits[id];else{pendingEdits[id]=newVal;input.style.borderColor='var(--warn)';}updateUnsaved();}
+function updateUnsaved(){const count=Object.keys(pendingEdits).length,badge=document.getElementById('unsaved-badge'),saveBtn=document.getElementById('save-btn');if(count>0){badge.textContent=`● ${count} өөрчлөлт`;badge.classList.add('visible');saveBtn.style.display='flex';}else{badge.classList.remove('visible');saveBtn.style.display='none';}}
+async function saveChanges(){
+  const ids=Object.keys(pendingEdits);if(!ids.length)return;
+  const btn=document.getElementById('save-btn');btn.textContent='⏳ Хадгалж байна...';btn.disabled=true;
+  let saved=0,failed=0;
+  for(const id of ids){
+    const val=pendingEdits[id],numVal=parseFloat(val);
+    const row=rawData.find(r=>String(r.settings_id)===String(id));
+    const prevHistory=normalizeHistory(row?.history);
+    const prevEntry={value_num:row?.value_num??null,value_text:row?.value_text??null,ts:new Date().toISOString(),by:'web'};
+    const nextHistory=normalizeHistory([prevEntry,...prevHistory]);
+    const body=isNaN(numVal)?{value_num:null,value_text:val,updated_by:'web',history:nextHistory}:{value_num:numVal,value_text:null,updated_by:'web',history:nextHistory};
+    try{const{error}=await sb.from('settings').update(body).eq('id',id);if(error)throw new Error(error.message);saved++;delete pendingEdits[id];}catch(e){failed++;}
+  }
+  btn.textContent='💾 Хадгалах';btn.disabled=false;
+  if(failed===0){toast(`✅ ${saved} тавил хадгалагдлаа`,'success');updateUnsaved();document.querySelectorAll('.edit-input').forEach(i=>i.style.borderColor='var(--accent)');await selectStation(currentStationId,currentStation);}
+  else{toast(`⚠️ ${saved} хадгаллаа, ${failed} алдаа`,'warn');}
+}
+function exportCSV(){if(!filteredData.length){toast('Өгөгдөл байхгүй','error');return;}const h=['Станц','Тоноглол','Төрөл','Кт','Хамгаалалт','Шатлал','Параметр','Тавил','Огноо','Нэгж'];const rows=filteredData.map(r=>[currentStation,r.equipment_name,r.equipment_type||'',r.ct_text||'',r.func_code||'',r.stage??'',r.param_code||'',r.value_display??'',(r.updated_at?'/'+String(r.updated_at).slice(0,10)+'/':''),r.unit||'']);const csv=[h,...rows].map(r=>r.map(c=>`"${String(c).replaceAll('"','""')}"`).join(',')).join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=`${currentStation}_тавил.csv`;a.click();toast('✅ CSV татагдлаа','success');}
+function refreshData(){if(currentStationId)selectStation(currentStationId,currentStation);}
+function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast ${type} show`;setTimeout(()=>t.classList.remove('show'),3000);}
+function toggleTheme(){const b=document.body,t=b.getAttribute('data-theme')==='dark'?'light':'dark';b.setAttribute('data-theme',t);try{localStorage.setItem('rha_theme',t)}catch(e){}}
+(function(){try{const t=localStorage.getItem('rha_theme');if(t)document.body.setAttribute('data-theme',t)}catch(e){}})();
+init();
+document.getElementById('station-search').addEventListener('input',e=>{const q=(e.target.value||'').toLowerCase().trim();const filtered=!q?allStations:allStations.filter(s=>(s.name||'').toLowerCase().includes(q));renderSidebar(filtered);});
+</script>
+</body></html>

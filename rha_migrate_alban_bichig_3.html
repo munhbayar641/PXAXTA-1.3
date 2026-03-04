@@ -1,0 +1,203 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/>
+<title>Албан бичиг — Migration</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:monospace;background:#070a12;color:#e8efff;padding:20px;font-size:12px}
+h2{color:#4bd6ff;margin-bottom:14px;font-size:15px}
+.btn{background:linear-gradient(135deg,#4bd6ff,#8b5bff);color:#001018;border:none;padding:10px 20px;border-radius:12px;cursor:pointer;font-weight:900;margin:4px;font-size:13px}
+.btn2{background:rgba(255,255,255,.08);color:#e8efff;border:1px solid rgba(255,255,255,.15);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:700;margin:4px;font-size:12px}
+.card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:16px;margin-bottom:12px}
+.ok{color:#3cffb2}.err{color:#ff4d7d}.warn{color:#f5a623}.accent{color:#4bd6ff}
+.line{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);line-height:1.6}
+#log{max-height:500px;overflow-y:auto;margin-top:8px}
+.progress{height:6px;background:rgba(255,255,255,.1);border-radius:99px;margin:10px 0}
+.progress-bar{height:6px;background:linear-gradient(90deg,#4bd6ff,#8b5bff);border-radius:99px;transition:width .3s;width:0}
+.stat{display:inline-block;padding:6px 12px;border-radius:10px;background:rgba(255,255,255,.07);margin:3px;font-weight:900}
+</style>
+</head>
+<body>
+<h2>📦 Албан бичиг — Bucket → Table Migration</h2>
+
+<div class="card">
+  <p style="color:#9bb0d4;margin-bottom:12px;line-height:1.7">
+    <b>alban_bichig</b> bucket-ийн бүх PDF-г scan хийж<br>
+    <b>alban_bichig</b> table-д автоматаар бичнэ.<br>
+    <span class="warn">⚠ Bucket-д байгаа 1 UUID folder-ийн доорх бүх файлыг оруулна.</span>
+  </p>
+  <button class="btn" onclick="startMigration()">▶ Migration эхлүүлэх</button>
+  <button class="btn2" onclick="clearLog()">🗑 Clear</button>
+  <button class="btn2" onclick="checkTable()">📋 Table харах</button>
+</div>
+
+<div class="card">
+  <div style="display:flex;gap:16px;flex-wrap:wrap" id="stats">
+    <div class="stat">Нийт: <span id="sTotal">—</span></div>
+    <div class="stat ok">Нэмсэн: <span id="sAdded">0</span></div>
+    <div class="stat warn">Байсан: <span id="sSkip">0</span></div>
+    <div class="stat err">Алдаа: <span id="sErr">0</span></div>
+  </div>
+  <div class="progress"><div class="progress-bar" id="bar"></div></div>
+  <div id="log"></div>
+</div>
+
+<script>
+const SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+const SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+const BUCKET='alban_bichig';
+const DUT='dut';
+const sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+let added=0,skipped=0,errors=0,total=0;
+
+function log(msg,cls=''){
+  const d=document.getElementById('log');
+  const el=document.createElement('div');
+  el.className='line '+(cls||'');
+  el.innerHTML=msg;
+  d.appendChild(el);
+  d.scrollTop=d.scrollHeight;
+}
+function clearLog(){document.getElementById('log').innerHTML='';added=0;skipped=0;errors=0;total=0;updateStats(0,0);}
+function updateStats(done,tot){
+  document.getElementById('sTotal').textContent=tot||total||'—';
+  document.getElementById('sAdded').textContent=added;
+  document.getElementById('sSkip').textContent=skipped;
+  document.getElementById('sErr').textContent=errors;
+  if(tot>0) document.getElementById('bar').style.width=(done/tot*100)+'%';
+}
+
+// Load stations map: id -> name
+async function loadStations(){
+  const{data,error}=await sb.from('stations').select('id,name');
+  if(error){log('❌ stations: '+error.message,'err');return {};}
+  const map={};
+  (data||[]).forEach(s=>map[s.id]=s.name);
+  return map;
+}
+
+async function startMigration(){
+  clearLog();
+  log('🚀 Migration эхэлж байна…','accent');
+
+  // 1. Load stations
+  const stMap=await loadStations();
+  log(`✅ ${Object.keys(stMap).length} станц татагдлаа`,'ok');
+
+  // Known bucket root folder (UUID from Supabase dashboard)
+  const rootFolders=['2a8a6b17-8ee8-5d83-860d-a1fb6bc0bff6'];
+  log(`📁 Known bucket folder: ${rootFolders[0].slice(0,12)}…`);
+
+  // 3. For each root folder, scan {folder}/dut/{year}/{subfolder}/...pdf
+  let allFiles=[];
+
+  for(const rootFolder of rootFolders){
+    log(`\n📁 Root folder: ${rootFolder.slice(0,12)}…`);
+
+    const dutPath=`${rootFolder}/${DUT}`;
+    const{data:dutData}=await sb.storage.from(BUCKET).list(dutPath,{limit:200});
+    if(!dutData||!dutData.length){log(`  ⚠️ ${dutPath}/ хоосон`,'warn');continue;}
+
+    const yearFolders=dutData.filter(x=>x.metadata==null&&/^\d{4}$/.test(x.name));
+    log(`  📅 ${yearFolders.length} жил: ${yearFolders.map(y=>y.name).join(', ')}`);
+
+    for(const yf of yearFolders){
+      const year=parseInt(yf.name);
+      const yearPath=`${dutPath}/${yf.name}`;
+      const{data:yearData}=await sb.storage.from(BUCKET).list(yearPath,{limit:500});
+      if(!yearData)continue;
+
+      // Year folder contains station_id subfolders
+      const stationFolders=yearData.filter(x=>x.metadata==null);
+      const directPdfs=yearData.filter(x=>x.metadata!=null&&(x.name||'').toLowerCase().endsWith('.pdf'));
+
+      // Direct PDFs in year folder (no station subfolder)
+      for(const f of directPdfs){
+        allFiles.push({stationId:null,stationName:'Unknown',year,folder:null,name:f.name,path:`${yearPath}/${f.name}`});
+      }
+
+      // Station subfolders inside year
+      for(const sf of stationFolders){
+        const stationId=sf.name; // This is the station UUID
+        const stationName=stMap[stationId]||('Unknown: '+stationId.slice(0,8)+'…');
+        const sfPath=`${yearPath}/${sf.name}`;
+        const{data:sfData}=await sb.storage.from(BUCKET).list(sfPath,{limit:500});
+        if(!sfData)continue;
+
+        // Direct PDFs in station folder
+        const pdfs=sfData.filter(x=>x.metadata!=null&&(x.name||'').toLowerCase().endsWith('.pdf'));
+        for(const f of pdfs){
+          allFiles.push({stationId,stationName,year,folder:null,name:f.name,path:`${sfPath}/${f.name}`});
+        }
+
+        // Sub-subfolders inside station folder
+        const subFolders=sfData.filter(x=>x.metadata==null);
+        for(const sub of subFolders){
+          const subPath=`${sfPath}/${sub.name}`;
+          const{data:subData}=await sb.storage.from(BUCKET).list(subPath,{limit:500});
+          if(!subData)continue;
+          const subPdfs=subData.filter(x=>x.metadata!=null&&(x.name||'').toLowerCase().endsWith('.pdf'));
+          for(const f of subPdfs){
+            allFiles.push({stationId,stationName,year,folder:sub.name,name:f.name,path:`${subPath}/${f.name}`});
+          }
+        }
+      }
+    }
+  }
+
+  total=allFiles.length;
+  log(`\n📊 Нийт ${total} PDF олдлоо — table-д оруулж байна…`,'accent');
+  updateStats(0,total);
+
+  if(!total){log('⚠️ PDF олдсонгүй','warn');return;}
+
+  // 4. Insert into table
+  let done=0;
+  for(const f of allFiles){
+    // Get public URL
+    const{data:pub}=sb.storage.from(BUCKET).getPublicUrl(f.path);
+    const publicUrl=pub?.publicUrl||null;
+
+    // Check if already exists
+    const{data:existing}=await sb.from('alban_bichig')
+      .select('id').eq('file_path',f.path).limit(1);
+
+    if(existing&&existing.length>0){
+      skipped++;
+      log(`  ⏭ Байсан: ${f.name}`,'warn');
+    } else {
+      const{error:insErr}=await sb.from('alban_bichig').insert({
+        station_id: f.stationId,
+        year: f.year,
+        folder: f.folder||null,
+        title: f.name,
+        file_path: f.path,
+        public_url: publicUrl,
+        updated_at: new Date().toISOString()
+      });
+      if(insErr){
+        errors++;
+        log(`  ❌ ${f.name}: ${insErr.message}`,'err');
+      } else {
+        added++;
+        log(`  ✅ <span class="ok">${f.stationName}</span> / ${f.year}${f.folder?' / '+f.folder:''} / <b>${f.name}</b>`);
+      }
+    }
+    done++;
+    updateStats(done,total);
+  }
+
+  log(`\n🎉 Дууслаа! Нэмсэн: ${added}, Байсан: ${skipped}, Алдаа: ${errors}`,'ok');
+}
+
+async function checkTable(){
+  clearLog();
+  const{data,error}=await sb.from('alban_bichig').select('station_id,year,folder,title,file_path').order('year',{ascending:false}).limit(20);
+  if(error){log('❌ '+error.message,'err');return;}
+  if(!data?.length){log('📭 Table хоосон байна','warn');return;}
+  log(`📋 Эхний ${data.length} мөр:`,'accent');
+  data.forEach(r=>log(`  <span class="ok">${r.year}</span> | ${r.folder||'root'} | <b>${r.title}</b>`));
+}
+</script>
+</body></html>

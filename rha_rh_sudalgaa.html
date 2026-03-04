@@ -1,0 +1,151 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>РХАХТА — Реле судалгаа</title>
+<link rel="stylesheet" href="rha_shared.css">
+<style>
+td{padding:7px 12px;border:1px solid rgba(255,255,255,.05);background:rgba(7,10,18,.3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+[data-theme="light"] td{background:rgba(255,255,255,.5);border-color:rgba(20,40,80,.07)}
+td.wrap{white-space:normal}
+tr:hover td{background:rgba(75,214,255,.05)}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+<div class="topbar">
+  <a href="rha_index.html" class="brand" style="text-decoration:none;cursor:pointer">
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/salbar_logo/logo.png" style="height:36px;width:auto;object-fit:contain;border-radius:6px" alt="Салбар лого"/>
+    <div style="width:1px;height:28px;background:var(--border);flex-shrink:0"></div>
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/alba_logo/Logo.jpg" style="height:32px;width:auto;object-fit:contain;border-radius:4px" alt="Алба лого"/>
+    <div class="brand-text" style="margin-left:4px"><b>РХАХТА</b><span>Stations · Settings</span></div>
+  </a>
+  <nav class="nav">
+    <a href="rha_tavil.html">Тавилын карт</a>
+    <a href="rha_rh_sudalgaa.html" class="active">Реле судалгаа</a>
+    <a href="rha_alban_bichig.html">Албан бичиг</a>
+    <a href="rha_station_schema.html">Схем (PDF)</a>
+    <a href="rha_login.html">Login</a>
+  </nav>
+  <div class="topbar-right">
+    <div class="conn-chip"><span class="conn-dot" id="conn-dot"></span><span id="conn-text">Холбогдож байна…</span></div>
+    <button class="btn" onclick="toggleTheme()">🌓</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="search-box" id="station-search" placeholder="🔍  Станц хайх..." type="text"/>
+    </div>
+    <div class="station-list" id="station-list">
+      <div class="center-msg" style="height:180px"><div class="loading-bar"></div><p style="font-size:12px">Уншиж байна...</p></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar2">
+      <div>
+        <div class="main-title" id="main-title">Станц сонгоно уу</div>
+        <div class="main-meta" id="main-meta">← Зүүн талаас сонгоно уу</div>
+      </div>
+      <div class="topbar2-right">
+        <select class="sel" id="status-filter">
+          <option value="">Бүх төлөв</option>
+          <option value="Ашиглалтад">Ашиглалтад</option>
+          <option value="Буулгасан">Буулгасан</option>
+        </select>
+        <button class="btn" onclick="exportCSV()">⬇ CSV</button>
+        <button class="btn btn-primary" onclick="refreshData()">↻</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div style="font-size:16px">🛡️</div><div><div class="stat-val" id="st-total">—</div><div class="stat-label">Нийт РХ</div></div></div>
+      <div class="stat-card"><div style="font-size:16px">✅</div><div><div class="stat-val" id="st-active">—</div><div class="stat-label">Ашиглалтад</div></div></div>
+      <div class="stat-card"><div style="font-size:16px">🧯</div><div><div class="stat-val" id="st-removed">—</div><div class="stat-label">Буулгасан</div></div></div>
+      <div class="stat-card"><div style="font-size:16px">🏭</div><div><div class="stat-val" id="st-mfg">—</div><div class="stat-label">Үйлдвэрлэгч</div></div></div>
+    </div>
+
+    <div class="table-area" id="table-area">
+      <div class="center-msg"><div class="c-icon">⚡</div><p>Станц сонгоод РХ жагсаалт харна уу</p></div>
+    </div>
+  </div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="rha_auth.js"></script>
+<script>
+var SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+var SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+var sb=supabase.createClient(SB_URL,SB_KEY);
+let allStations=[],currentStation=null,stationRows=[];
+function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type+' show';setTimeout(()=>t.classList.remove('show'),2600);}
+function setConn(ok){const d=document.getElementById('conn-dot'),t=document.getElementById('conn-text');if(d)d.className='conn-dot'+(ok?' ok':' bad');if(t)t.textContent=ok?'Supabase — Холбогдсон':'Холболт алдаа';}
+function esc(s=''){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
+async function init(){
+  try{
+    const{error:pingErr}=await sb.from('v_rh').select('station_name').limit(1);if(pingErr)throw pingErr;
+    setConn(true);await loadStations();toast('✅ Холбогдлоо','success');
+  }catch(e){setConn(false);document.getElementById('station-list').innerHTML='<div style="padding:12px;color:var(--danger);font-size:12px">Алдаа: '+esc(e.message||String(e))+'</div>';toast('❌ Алдаа гарлаа','error');}
+}
+const ICONS=['🛡️','⚡','🔌','🏭','🔧','📡','🔋','⚙️','💡','🔩'];
+async function loadStations(){
+  const{data,error}=await sb.from('v_rh').select('station_name').not('station_name','is',null).limit(100000);if(error)throw error;
+  const col=new Intl.Collator('mn',{sensitivity:'base',numeric:true});
+  const unique=[...new Set((data||[]).map(r=>r.station_name).filter(v=>v&&String(v).trim()!==''))].sort((a,b)=>col.compare(a,b));
+  allStations=unique.map(name=>({name}));renderSidebar(allStations);
+}
+function renderSidebar(list){
+  const el=document.getElementById('station-list');
+  if(!list.length){el.innerHTML='<div class="center-msg" style="height:120px"><p>Станц олдсонгүй</p></div>';return;}
+  el.innerHTML='';
+  list.forEach((s,i)=>{const item=document.createElement('div');item.className='station-item'+(currentStation===s.name?' active':'');item.onclick=()=>selectStation(s.name);item.innerHTML=`<div class="s-icon">${ICONS[i%ICONS.length]}</div><div class="s-name">${esc(s.name)}</div><div class="s-count">РХ</div>`;el.appendChild(item);});
+}
+document.getElementById('station-search').addEventListener('input',e=>{const q=(e.target.value||'').toLowerCase();renderSidebar(allStations.filter(s=>(s.name||'').toLowerCase().includes(q)));});
+async function selectStation(name){
+  currentStation=name;renderSidebar(allStations);
+  document.getElementById('main-title').textContent=name;document.getElementById('main-meta').textContent='Уншиж байна...';
+  document.getElementById('table-area').innerHTML='<div class="center-msg"><div class="loading-bar"></div><p>Уншиж байна...</p></div>';
+  const{data,error}=await sb.from('v_rh').select('*').eq('station_name',name).limit(100000);
+  if(error){document.getElementById('table-area').innerHTML='<div class="center-msg"><div class="c-icon">⚠️</div><p>'+esc(error.message)+'</p></div>';return;}
+  stationRows=data||[];updateStats();applyFilters();
+}
+document.getElementById('status-filter').addEventListener('change',applyFilters);
+function updateStats(){
+  const total=stationRows.length,active=stationRows.filter(r=>(r.status||'').toLowerCase().includes('ашиг')).length,removed=stationRows.filter(r=>(r.status||'').toLowerCase().includes('буул')).length;
+  const mfgSet=new Set(stationRows.map(r=>(r.mfg_name||'').trim()).filter(Boolean));
+  document.getElementById('st-total').textContent=total;document.getElementById('st-active').textContent=active;document.getElementById('st-removed').textContent=removed;document.getElementById('st-mfg').textContent=mfgSet.size;
+  document.getElementById('main-meta').textContent=total+' мөр · '+mfgSet.size+' үйлдвэрлэгч';
+}
+function applyFilters(){const sf=document.getElementById('status-filter').value;let rows=stationRows.slice();if(sf)rows=rows.filter(r=>(r.status||'')===sf);renderTable(rows);}
+function renderTable(rows){
+  const area=document.getElementById('table-area');
+  if(!rows.length){area.innerHTML='<div class="center-msg"><div class="c-icon">📭</div><p>Өгөгдөл байхгүй</p></div>';return;}
+  rows.sort((a,b)=>String(a.equipment_name||'').localeCompare(String(b.equipment_name||''),'mn'));
+  let html='<table><thead><tr>';
+  ['ДД','Тоноглолын нэр','кВ','Төрөл','Марк','Үйлдвэрлэгч','Улс','Серийн №','Үйлдвэр огноо','Суурилуулсан','Хүчдэлд залгасан','Буулгасан','Партын №','Төлөв','Тайлбар','Зураг'].forEach((h,i)=>{
+    const w=[44,240,80,110,110,200,100,140,130,130,150,130,150,130,240,110][i];html+=`<th style="width:${w}px">${h}</th>`;
+  });
+  html+='</tr></thead><tbody>';
+  rows.forEach((r,idx)=>{
+    const status=(r.status||'').toLowerCase();
+    const badgeClass=status.includes('ашиг')?'ok':(status.includes('буул')?'bad':'');
+    html+=`<tr><td>${idx+1}</td><td title="${esc(r.equipment_name||'')}">${esc(r.equipment_name||'')}</td><td>${esc(r.voltage_kv_text||'')}</td><td>${esc(r.equipment_type||'')}</td><td>${esc(r.model||'')}</td><td title="${esc(r.mfg_name||'')}">${esc(r.mfg_name||'')}</td><td>${esc(r.mfg_country||'')}</td><td>${esc(r.serial_no||'')}</td><td>${esc(r.mfg_date_text||'')}</td><td>${esc(r.install_date_text||'')}</td><td>${esc(r.energized_date_text||'')}</td><td>${esc(r.decommission_date_text||'')}</td><td>${esc(r.part_no||'')}</td><td><span class="badge ${badgeClass}">${esc(r.status||'—')}</span></td><td class="wrap" title="${esc(r.comment||'')}">${esc(r.comment||'')}</td><td>${r.image_url&&String(r.image_url).trim()!==''?`<a class="btn" style="padding:3px 8px" target="_blank" href="${esc(r.image_url)}">Open</a>`:'—'}</td></tr>`;
+  });
+  html+='</tbody></table>';area.innerHTML=html;
+}
+function refreshData(){if(currentStation)selectStation(currentStation);else init();}
+function exportCSV(){
+  if(!currentStation||!stationRows.length){toast('Өгөгдөл байхгүй','error');return;}
+  const sf=document.getElementById('status-filter').value;let rows=stationRows.slice();if(sf)rows=rows.filter(r=>(r.status||'')===sf);
+  const header=['Станц','Тоноглол','кV','Төрөл','Марк','Үйлдвэрлэгч','Улс','Серийн№','Үйлдвэр огноо','Суурилуулсан','Хүчдэлд залгасан','Буулгасан','Партын №','Төлөв','Тайлбар','Зураг'];
+  const body=rows.map(r=>[r.station_name||'',r.equipment_name||'',r.voltage_kv_text||'',r.equipment_type||'',r.model||'',r.mfg_name||'',r.mfg_country||'',r.serial_no||'',r.mfg_date_text||'',r.install_date_text||'',r.energized_date_text||'',r.decommission_date_text||'',r.part_no||'',r.status||'',r.comment||'',r.image_url||'']);
+  const csv=[header,...body].map(row=>row.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=currentStation+'_RH.csv';a.click();toast('✅ CSV татагдлаа','success');
+}
+function toggleTheme(){const b=document.body,t=b.getAttribute('data-theme')==='dark'?'light':'dark';b.setAttribute('data-theme',t);try{localStorage.setItem('rha_theme',t)}catch(e){}}
+(function(){try{const t=localStorage.getItem('rha_theme');if(t)document.body.setAttribute('data-theme',t)}catch(e){}})();
+init();
+</script>
+</body></html>

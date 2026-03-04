@@ -1,0 +1,122 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>РХАХТА — Нэвтрэх</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="stylesheet" href="rha_shared.css">
+<style>
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:20px;
+  background:radial-gradient(1200px 700px at 15% 10%,rgba(75,214,255,.15),transparent 55%),
+             radial-gradient(1000px 700px at 90% 20%,rgba(139,91,255,.13),transparent 60%),
+             linear-gradient(180deg,var(--bg0),var(--bg1));
+}
+.login-card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--border);
+  border-radius:24px;padding:36px;backdrop-filter:blur(12px);box-shadow:var(--shadow)}
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.logo-icon{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#4bd6ff,#8b5bff);
+  display:grid;place-items:center;font-weight:900;font-size:16px;color:#001018;box-shadow:0 4px 16px rgba(75,214,255,.3)}
+.logo-text b{display:block;font-size:18px;font-weight:900}
+.logo-text span{font-size:12px;color:var(--muted)}
+h2{font-size:15px;font-weight:900;margin-bottom:20px;color:var(--text)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.field input{width:100%;padding:11px 14px;background:rgba(0,0,0,.2);border:1px solid var(--border);
+  border-radius:12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--accent)}
+[data-theme="light"] .field input{background:rgba(255,255,255,.7)}
+.err{color:var(--danger);font-size:12px;margin-bottom:12px;padding:10px 12px;
+  background:rgba(255,77,125,.08);border:1px solid rgba(255,77,125,.25);border-radius:10px;display:none}
+.btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#4bd6ff,#8b5bff);
+  color:#001018;border:none;border-radius:14px;font-weight:900;font-size:14px;cursor:pointer;
+  transition:filter .15s,transform .1s;margin-top:4px}
+.btn-login:hover{filter:brightness(1.1)}
+.btn-login:active{transform:translateY(1px)}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+.hint{font-size:11px;color:var(--muted);text-align:center;margin-top:16px;line-height:1.6}
+.role-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:900;margin-top:8px}
+</style>
+</head>
+<body data-theme="dark">
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="logo">
+      <div class="logo-icon">РХ</div>
+      <div class="logo-text"><b>РХАХТА</b><span>Stations · Settings</span></div>
+      <button class="btn" style="margin-left:auto;padding:6px 10px;font-size:11px" onclick="toggleTheme()">🌓</button>
+    </div>
+    <h2>Нэвтрэх</h2>
+    <div class="err" id="err"></div>
+    <div class="field">
+      <label>И-мэйл</label>
+      <input type="email" id="email" placeholder="name@example.com" autocomplete="email"/>
+    </div>
+    <div class="field">
+      <label>Нууц үг</label>
+      <input type="password" id="pass" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Нэвтрэх</button>
+    <div class="hint" id="roleHint"></div>
+  </div>
+</div>
+
+<script>
+const SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+const SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+const VIEWER_TIMEOUT=60*60*1000;
+const STORAGE_KEY='rha_login_time';
+var sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+// Already logged in?
+(async()=>{
+  const{data:{session}}=await sb.auth.getSession();
+  if(session) await checkAndRedirect(session);
+})();
+
+async function doLogin(){
+  const email=document.getElementById('email').value.trim();
+  const pass=document.getElementById('pass').value;
+  const btn=document.getElementById('loginBtn');
+  const err=document.getElementById('err');
+  err.style.display='none';
+  if(!email||!pass){showErr('И-мэйл болон нууц үгээ оруулна уу.');return;}
+  btn.disabled=true;btn.textContent='Нэвтэрч байна…';
+  try{
+    const{data,error}=await sb.auth.signInWithPassword({email,password:pass});
+    if(error)throw error;
+    await checkAndRedirect(data.session);
+  }catch(e){
+    showErr(e.message==='Invalid login credentials'?'И-мэйл эсвэл нууц үг буруу байна.':e.message);
+    btn.disabled=false;btn.textContent='Нэвтрэх';
+  }
+}
+
+async function checkAndRedirect(session){
+  const{data:profile}=await sb.from('profiles').select('role,full_name,username').eq('id',session.user.id).single();
+  const role=(profile?.role||'viewer').toLowerCase();
+  const name=profile?.full_name||profile?.username||session.user.email;
+
+  // Set login time for viewer
+  if(role==='viewer'){
+    localStorage.setItem(STORAGE_KEY,String(Date.now()));
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  const labels={admin:'🔴 ADMIN — хугацаагүй',editor:'🟢 EDITOR — хугацаагүй',viewer:'🔵 VIEWER — 1 цаг'};
+  const hint=document.getElementById('roleHint');
+  hint.innerHTML=`Тавтай морил, <b>${escHtml(name)}</b><br>
+    <span class="role-badge" style="background:rgba(75,214,255,.15);color:var(--accent)">${labels[role]||role}</span>`;
+
+  setTimeout(()=>{ window.location.href='rha_index.html'; },800);
+}
+
+function showErr(msg){
+  const e=document.getElementById('err');
+  e.textContent=msg;e.style.display='block';
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+function toggleTheme(){const b=document.body,t=b.getAttribute('data-theme')==='dark'?'light':'dark';b.setAttribute('data-theme',t);try{localStorage.setItem('rha_theme',t)}catch(e){}}
+(function(){try{const t=localStorage.getItem('rha_theme');if(t)document.body.setAttribute('data-theme',t)}catch(e){}})();
+function escHtml(s=''){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
+</script>
+</body></html>

@@ -1,0 +1,303 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>РХАХТА — Албан бичиг</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="rha_auth.js"></script>
+<link rel="stylesheet" href="rha_shared.css">
+<style>
+.content{padding:14px;height:100%;display:grid;grid-template-columns:340px 1fr;gap:14px;overflow:hidden}
+.left{display:flex;flex-direction:column;min-height:0}
+.leftHead{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:9px;background:linear-gradient(180deg,rgba(255,255,255,.07),transparent)}
+.metaRow{display:flex;gap:7px;flex-wrap:wrap}
+.searchWrap{display:flex;gap:8px;align-items:center}
+.search{flex:1;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.12)}
+[data-theme="light"] .search{background:rgba(255,255,255,.65)}
+.search input{width:100%;border:0;outline:0;background:transparent;color:var(--text);font-size:13px;font-family:var(--font)}
+.search input::placeholder{color:rgba(155,176,212,.7)}
+
+/* 3 col: station | year | files */
+.split{display:grid;grid-template-columns:120px 70px 1fr;min-height:0;flex:1}
+.col{min-height:0;border-right:1px solid var(--border);display:flex;flex-direction:column}
+.col:last-child{border-right:0}
+.colHead{padding:8px 10px;font-weight:900;font-size:10px;letter-spacing:.4px;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;color:var(--muted)}
+.cnt{font-size:10px;color:var(--accent);font-weight:900}
+.list{padding:5px;overflow:auto;flex:1}
+.list::-webkit-scrollbar{width:3px}
+.list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:99px}
+.item{padding:7px 9px;border:1px solid transparent;border-radius:9px;cursor:pointer;transition:all .1s;margin-bottom:2px;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item:hover{background:rgba(75,214,255,.08);border-color:rgba(75,214,255,.25)}
+.item.active{background:rgba(75,214,255,.14);border-color:rgba(75,214,255,.55);color:var(--accent)}
+.item .sub{font-size:10px;color:var(--muted);font-weight:400;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.right{display:flex;flex-direction:column;min-height:0}
+.rightHead{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;background:linear-gradient(180deg,rgba(255,255,255,.07),transparent)}
+.docTitle{font-weight:900;font-size:14px}
+.crumbs{font-size:11px;color:var(--muted);margin-top:3px}
+.actions{margin-left:auto;display:flex;gap:8px}
+.viewer{flex:1;min-height:0}
+iframe{width:100%;height:100%;border:0;background:#fff}
+.empty-hint{height:100%;display:grid;place-items:center;color:var(--muted);text-align:center;padding:20px}
+.empty-card{max-width:400px;border:1px dashed rgba(255,255,255,.15);border-radius:16px;padding:20px;background:rgba(0,0,0,.06);line-height:1.8}
+[data-theme="light"] .empty-card{border-color:rgba(10,20,40,.15);background:rgba(255,255,255,.5)}
+@media(max-width:900px){.content{grid-template-columns:1fr;height:auto}.left{min-height:400px}}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+<div class="topbar">
+  <a href="rha_index.html" class="brand" style="text-decoration:none;cursor:pointer">
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/salbar_logo/logo.png" style="height:36px;width:auto;object-fit:contain;border-radius:6px" alt="Салбар лого"/>
+    <div style="width:1px;height:28px;background:var(--border);flex-shrink:0"></div>
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/alba_logo/Logo.jpg" style="height:32px;width:auto;object-fit:contain;border-radius:4px" alt="Алба лого"/>
+    <div class="brand-text" style="margin-left:4px"><b>РХАХТА</b><span>Stations · Settings</span></div>
+  </a>
+  <nav class="nav">
+    <a href="rha_tavil.html">Тавилын карт</a>
+    <a href="rha_rh_sudalgaa.html">Реле судалгаа</a>
+    <a href="rha_alban_bichig.html" class="active">Албан бичиг</a>
+    <a href="rha_station_schema.html">Схем (PDF)</a>
+    <a href="rha_login.html">Login</a>
+  </nav>
+  <div class="topbar-right">
+    <div class="conn-chip"><span class="conn-dot" id="connDot"></span><span id="connText">Холбогдож байна…</span></div>
+    <button class="btn" onclick="reload()">↻</button>
+    <button class="btn" onclick="toggleTheme()">🌓</button>
+  </div>
+</div>
+
+<div class="content">
+  <!-- LEFT: station / year / file picker -->
+  <div class="panel left">
+    <div class="leftHead">
+      <div class="metaRow">
+        <div class="pill">Table: <b>alban_bichig</b></div>
+      </div>
+      <div class="searchWrap">
+        <div class="search">
+          <span style="font-size:13px">🔎</span>
+          <input id="q" placeholder="PDF хайх…" oninput="onSearch()"/>
+        </div>
+        <button class="btn btn-primary" id="openBtn" onclick="openPdf()" disabled>📄 Open</button>
+      </div>
+    </div>
+    <div class="split">
+      <!-- Stations -->
+      <div class="col">
+        <div class="colHead"><span>Станц</span><span class="cnt" id="cSt">—</span></div>
+        <div class="list" id="stList"><div style="padding:10px;font-size:11px;color:var(--muted)">Уншиж байна…</div></div>
+      </div>
+      <!-- Years -->
+      <div class="col">
+        <div class="colHead"><span>Жил</span><span class="cnt" id="cYr">—</span></div>
+        <div class="list" id="yrList"><div style="padding:10px;font-size:11px;color:var(--muted)">—</div></div>
+      </div>
+      <!-- Files -->
+      <div class="col">
+        <div class="colHead"><span>PDF</span><span class="cnt" id="cFi">—</span></div>
+        <div class="list" id="fiList"><div style="padding:10px;font-size:11px;color:var(--muted)">—</div></div>
+      </div>
+    </div>
+    <div class="status-bar"><span class="kbd">Enter</span> Open · <span class="kbd">Esc</span> Clear</div>
+  </div>
+
+  <!-- RIGHT: viewer -->
+  <div class="panel right">
+    <div class="rightHead">
+      <div style="flex:1;min-width:0">
+        <div class="docTitle" id="docTitle">Файл сонгоно уу</div>
+        <div class="crumbs" id="docPath">Станц → Жил → PDF</div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="copyBtn" onclick="copyLink()" disabled>🔗 Copy</button>
+        <button class="btn btn-primary" id="dlBtn" onclick="download()" disabled>⬇ Download</button>
+      </div>
+    </div>
+    <div class="viewer" id="viewer">
+      <div class="empty-hint">
+        <div class="empty-card">
+          <b>Албан бичиг</b><br>
+          Зүүн талаас <b>Станц → Жил → PDF</b> сонгоод <b>Open</b> дарна уу.
+        </div>
+      </div>
+    </div>
+    <div class="status-bar" id="infoBar">—</div>
+  </div>
+</div>
+</div>
+
+<script>
+var SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+var SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+var sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+// All data
+let allRows=[];       // [{id,station_id,station_name,year,folder,title,file_path,public_url}]
+let stations=[];      // unique stations [{id,name}]
+let selSt=null, selYr=null, selFi=null;
+
+init();
+
+async function init(){
+  try{
+    // Load stations map
+    const{data:stData,error:stErr}=await sb.from('stations').select('id,name');
+    if(stErr)throw stErr;
+    const stMap={};
+    (stData||[]).forEach(s=>stMap[s.id]=s.name);
+
+    // Load all alban_bichig rows
+    const{data,error}=await sb.from('alban_bichig')
+      .select('id,station_id,year,folder,title,file_path,public_url')
+      .order('year',{ascending:false})
+      .order('title');
+    if(error)throw error;
+
+    allRows=(data||[]).map(r=>({...r, station_name:stMap[r.station_id]||r.station_id?.slice(0,8)||'—'}));
+
+    setConn(true);
+    buildStations();
+  }catch(e){
+    setConn(false);
+    document.getElementById('stList').innerHTML=`<div style="padding:10px;font-size:11px;color:var(--danger)">❌ ${esc(e.message)}</div>`;
+  }
+}
+
+function setConn(ok){
+  document.getElementById('connDot').className='conn-dot'+(ok?' ok':' bad');
+  document.getElementById('connText').textContent=ok?'Supabase — Холбогдсон':'Холболт алдаа';
+}
+
+/* ── Build station list ───────────────────────────────────── */
+function buildStations(){
+  const seen=new Set();
+  stations=[];
+  allRows.forEach(r=>{
+    if(!seen.has(r.station_id)){
+      seen.add(r.station_id);
+      stations.push({id:r.station_id,name:r.station_name});
+    }
+  });
+  stations.sort((a,b)=>a.name.localeCompare(b.name));
+  document.getElementById('cSt').textContent=stations.length;
+  renderStations();
+}
+
+function renderStations(){
+  const q=document.getElementById('q').value.toLowerCase();
+  const list=q?stations.filter(s=>s.name.toLowerCase().includes(q)):stations;
+  document.getElementById('stList').innerHTML=list.map(s=>
+    `<div class="item${selSt===s.id?' active':''}" onclick="selectSt('${s.id}')">${esc(s.name)}</div>`
+  ).join('')||'<div style="padding:8px;font-size:11px;color:var(--muted)">Олдсонгүй</div>';
+}
+
+function selectSt(id){
+  selSt=id; selYr=null; selFi=null;
+  resetRight();
+  renderStations();
+  buildYears();
+}
+
+/* ── Years ────────────────────────────────────────────────── */
+function buildYears(){
+  const rows=allRows.filter(r=>r.station_id===selSt);
+  const years=[...new Set(rows.map(r=>r.year))].sort((a,b)=>b-a);
+  document.getElementById('cYr').textContent=years.length;
+  document.getElementById('yrList').innerHTML=years.map(y=>
+    `<div class="item${selYr===y?' active':''}" onclick="selectYr(${y})">${y}</div>`
+  ).join('')||'<div style="padding:8px;font-size:11px;color:var(--muted)">—</div>';
+  document.getElementById('fiList').innerHTML='<div style="padding:8px;font-size:11px;color:var(--muted)">Жил сонгоно уу</div>';
+  document.getElementById('cFi').textContent='—';
+}
+
+function selectYr(y){
+  selYr=y; selFi=null;
+  resetRight();
+  // re-render years active state
+  document.getElementById('yrList').querySelectorAll('.item').forEach(el=>{
+    el.classList.toggle('active',parseInt(el.textContent)===y);
+  });
+  buildFiles();
+}
+
+/* ── Files ────────────────────────────────────────────────── */
+function buildFiles(){
+  const q=document.getElementById('q').value.toLowerCase();
+  let rows=allRows.filter(r=>r.station_id===selSt&&r.year===selYr);
+  if(q) rows=rows.filter(r=>(r.title||'').toLowerCase().includes(q));
+  rows.sort((a,b)=>a.title.localeCompare(b.title));
+  document.getElementById('cFi').textContent=rows.length;
+  document.getElementById('fiList').innerHTML=rows.map(r=>
+    `<div class="item${selFi===r.id?' active':''}" onclick="selectFi('${r.id}')">
+      ${esc(r.title)}
+      ${r.folder?`<div class="sub">📁 ${esc(r.folder)}</div>`:''}
+    </div>`
+  ).join('')||'<div style="padding:8px;font-size:11px;color:var(--muted)">PDF олдсонгүй</div>';
+}
+
+function selectFi(id){
+  selFi=id;
+  buildFiles();
+  const r=allRows.find(x=>x.id===id);
+  if(!r)return;
+  document.getElementById('openBtn').disabled=false;
+  document.getElementById('copyBtn').disabled=!r.public_url;
+  document.getElementById('dlBtn').disabled=!r.public_url;
+  document.getElementById('docTitle').textContent=r.title;
+  document.getElementById('docPath').textContent=`${r.station_name} → ${r.year}${r.folder?' → '+r.folder:''}`;
+  document.getElementById('infoBar').textContent=`📄 ${r.title}`;
+}
+
+function openPdf(){
+  const r=allRows.find(x=>x.id===selFi);
+  if(!r?.public_url)return;
+  document.getElementById('viewer').innerHTML=`<iframe src="${esc(r.public_url)}" title="${esc(r.title)}"></iframe>`;
+}
+
+function copyLink(){
+  const r=allRows.find(x=>x.id===selFi);
+  if(!r?.public_url)return;
+  navigator.clipboard.writeText(r.public_url).then(()=>toast('✅ Link copied')).catch(()=>prompt('Copy:',r.public_url));
+}
+function download(){
+  const r=allRows.find(x=>x.id===selFi);
+  if(r?.public_url)window.open(r.public_url,'_blank','noopener,noreferrer');
+}
+
+function onSearch(){
+  renderStations();
+  if(selSt&&selYr)buildFiles();
+  else if(selSt)buildYears();
+}
+
+function resetRight(){
+  document.getElementById('openBtn').disabled=true;
+  document.getElementById('copyBtn').disabled=true;
+  document.getElementById('dlBtn').disabled=true;
+  document.getElementById('docTitle').textContent='Файл сонгоно уу';
+  document.getElementById('docPath').textContent='Станц → Жил → PDF';
+  document.getElementById('infoBar').textContent='—';
+  document.getElementById('viewer').innerHTML='<div class="empty-hint"><div class="empty-card"><b>PDF сонгоно уу</b><br>Open дарна уу.</div></div>';
+}
+
+async function reload(){
+  selSt=null;selYr=null;selFi=null;
+  document.getElementById('q').value='';
+  document.getElementById('stList').innerHTML='<div style="padding:10px;font-size:11px;color:var(--muted)">Уншиж байна…</div>';
+  document.getElementById('yrList').innerHTML='<div style="padding:10px;font-size:11px;color:var(--muted)">—</div>';
+  document.getElementById('fiList').innerHTML='<div style="padding:10px;font-size:11px;color:var(--muted)">—</div>';
+  resetRight();
+  await init();
+  toast('↻ Reloaded');
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&selFi)openPdf();
+  if(e.key==='Escape'){document.getElementById('q').value='';onSearch();}
+});
+
+function toggleTheme(){const b=document.body,t=b.getAttribute('data-theme')==='dark'?'light':'dark';b.setAttribute('data-theme',t);try{localStorage.setItem('rha_theme',t)}catch(e){}}
+(function(){try{const t=localStorage.getItem('rha_theme');if(t)document.body.setAttribute('data-theme',t)}catch(e){}})();
+function esc(s=''){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');}
+function toast(msg){const el=document.createElement('div');el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;padding:10px 14px;border:1px solid var(--border);border-radius:14px;background:var(--card2);box-shadow:var(--shadow);color:var(--text);font-weight:800;font-size:13px;';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),1400);}
+</script>
+</body></html>

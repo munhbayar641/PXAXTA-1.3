@@ -1,0 +1,446 @@
+<!doctype html><html lang="mn"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>РХАХТА — Станцын схем</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="rha_auth.js"></script>
+<link rel="stylesheet" href="rha_shared.css">
+<style>
+.main{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.main-top{
+  padding:12px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:linear-gradient(180deg,rgba(255,255,255,.07),transparent);
+}
+.main-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.viewer{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.viewer-hint{
+  flex:1;display:grid;place-items:center;
+  color:var(--muted);font-size:13px;text-align:center;padding:20px;line-height:1.9;
+}
+iframe{flex:1;width:100%;border:0;background:#fff}
+.footer{
+  padding:9px 14px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  color:var(--muted);font-size:11px;
+}
+
+/* PDF list dropdown */
+.pdf-wrap{position:relative}
+.pdf-dropdown{
+  display:none;position:absolute;top:calc(100% + 5px);right:0;
+  min-width:300px;max-width:500px;max-height:320px;overflow-y:auto;
+  background:var(--bg0);border:1px solid var(--border);border-radius:14px;
+  box-shadow:var(--shadow);z-index:60;padding:6px;
+}
+.pdf-wrap.open .pdf-dropdown{display:block}
+.pdf-item{
+  padding:9px 12px;border-radius:10px;cursor:pointer;
+  font-size:12px;transition:background .1s;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.pdf-item:hover{background:rgba(75,214,255,.09)}
+.pdf-item.active{background:rgba(75,214,255,.15);color:var(--accent)}
+.pdf-item .pdf-meta{font-size:10px;color:var(--muted);margin-top:2px}
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+<div class="topbar">
+  <a href="rha_index.html" class="brand" style="text-decoration:none;cursor:pointer">
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/salbar_logo/logo.png" style="height:36px;width:auto;object-fit:contain;border-radius:6px" alt="Салбар лого"/>
+    <div style="width:1px;height:28px;background:var(--border);flex-shrink:0"></div>
+    <img src="https://skpitxwtpqwoaydoltft.supabase.co/storage/v1/object/public/zurag/alba_logo/Logo.jpg" style="height:32px;width:auto;object-fit:contain;border-radius:4px" alt="Алба лого"/>
+    <div class="brand-text" style="margin-left:4px"><b>РХАХТА</b><span>Stations · Settings</span></div>
+  </a>
+  <nav class="nav">
+    <a href="rha_tavil.html">Тавилын карт</a>
+    <a href="rha_rh_sudalgaa.html">Реле судалгаа</a>
+    <a href="rha_alban_bichig.html">Албан бичиг</a>
+    <a href="rha_station_schema.html" class="active">Схем (PDF)</a>
+    <a href="rha_login.html">Login</a>
+  </nav>
+  <div class="topbar-right">
+    <div class="conn-chip"><span class="conn-dot" id="connDot"></span><span id="connText">Холбогдож байна…</span></div>
+    <button class="btn" onclick="toggleTheme()">🌓</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar: station list -->
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="search-box" id="q" placeholder="🔍 Станц хайх…"/>
+    </div>
+    <div class="station-list" id="stationList">
+      <div class="center-msg"><div class="loading-bar"></div><p style="font-size:12px">Уншиж байна…</p></div>
+    </div>
+  </div>
+
+  <!-- Main: viewer -->
+  <div class="main">
+    <div class="main-top">
+      <div>
+        <div class="main-title" id="stName">Станц сонгоно уу</div>
+        <div class="main-meta" id="stMeta">← Зүүн талаас сонгоно уу</div>
+      </div>
+      <div class="main-actions">
+        <!-- Dynamic kind selector -->
+        <div class="pdf-wrap" id="kindWrap">
+          <button class="btn btn-tab active" id="kindBtn" onclick="toggleKindPicker()">
+            <span id="kindLabel">Topology</span> ▾
+          </button>
+          <div class="pdf-dropdown" id="kindDropdown"></div>
+        </div>
+
+        <!-- PDF picker (multiple PDFs байвал) -->
+        <div class="pdf-wrap" id="pdfWrap" style="display:none">
+          <button class="btn" id="pdfPickBtn" onclick="togglePdfPicker()">
+            📋 <span id="pdfPickLabel">PDF сонгох</span>
+          </button>
+          <div class="pdf-dropdown" id="pdfDropdown"></div>
+        </div>
+
+        <!-- Actions for current PDF -->
+        <button class="btn" id="copyBtn" onclick="copyCurrentUrl()" disabled>🔗 Copy link</button>
+        <button class="btn" id="dlBtn" onclick="downloadCurrent()" disabled>⬇ Download</button>
+        <button class="btn btn-primary" onclick="uploadPDF()">＋ PDF оруулах</button>
+      </div>
+    </div>
+
+    <div class="viewer" id="viewer">
+      <div class="viewer-hint">
+        📁 Станц сонгоод <b>Topology</b> эсвэл <b>Зарчим</b>-аа сонгоорой.
+      </div>
+    </div>
+
+    <div class="footer">
+      <span id="docInfo">—</span>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:10px">
+        Bucket: <b>schema_ss</b> · Path: stations/{id}/{kind}/
+      </span>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+var SB_URL='https://skpitxwtpqwoaydoltft.supabase.co';
+var SB_KEY='sb_publishable_0WG4j8BScWCUcbfJ77s8aA_gu2M7fuu';
+const BUCKET='schema_ss';
+var sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+let allStations=[], currentStation=null, currentKind='topology';
+let currentPdfs=[], selectedPdf=null;
+
+init();
+
+/* ── Init ─────────────────────────────────────────────────── */
+async function init(){
+  try{
+    const{data,error}=await sb.from('stations').select('id,name').order('name');
+    if(error)throw new Error(error.message);
+    allStations=data||[];
+    setConn(true);
+    renderStations(allStations);
+  }catch(e){
+    setConn(false);
+    document.getElementById('stationList').innerHTML=
+      `<div class="center-msg"><div class="c-icon">❌</div><p style="font-size:12px">${esc(e.message)}</p></div>`;
+  }
+}
+
+function setConn(ok){
+  const d=document.getElementById('connDot'),t=document.getElementById('connText');
+  if(d)d.className='conn-dot'+(ok?' ok':' bad');
+  if(t)t.textContent=ok?'Supabase — Холбогдсон':'Холболт алдаа';
+}
+
+/* ── Station list ─────────────────────────────────────────── */
+document.getElementById('q').addEventListener('input',e=>{
+  const q=(e.target.value||'').toLowerCase().trim();
+  renderStations(!q?allStations:allStations.filter(s=>(s.name||'').toLowerCase().includes(q)));
+});
+
+function renderStations(list){
+  const el=document.getElementById('stationList');
+  if(!list.length){
+    el.innerHTML='<div class="center-msg" style="height:120px"><p>Олдсонгүй</p></div>';
+    return;
+  }
+  el.innerHTML=list.map(s=>`
+    <div class="station-item ${currentStation?.id===s.id?'active':''}"
+         onclick="selectStation('${esc(s.id)}','${esc(s.name)}')">
+      <div class="s-icon">🏭</div>
+      <div class="s-name">${esc(s.name)}</div>
+    </div>`).join('');
+}
+
+/* ── Select station ───────────────────────────────────────── */
+async function selectStation(id,name){
+  currentStation={id,name};
+  selectedPdf=null;currentPdfs=[];
+  renderStations(allStations);
+  document.getElementById('stName').textContent=name;
+  document.getElementById('stMeta').textContent='Схем уншиж байна…';
+  document.getElementById('copyBtn').disabled=true;
+  document.getElementById('dlBtn').disabled=true;
+  document.getElementById('pdfWrap').style.display='none';
+
+  // Load available kinds for this station
+  const kinds=await loadKinds(id);
+  // Default to topology if available, else first kind
+  currentKind=kinds.includes('topology')?'topology':kinds[0];
+  document.getElementById('kindLabel').textContent=kindLabel(currentKind);
+  renderKindDropdown(kinds);
+
+  await loadKind(currentKind);
+}
+
+/* ── Kind dropdown ────────────────────────────────────────── */
+const KIND_LABELS={'topology':'Topology','zarchim':'Зарчим','2dogchiin shem':'РХ-н схем'};
+function kindLabel(k){return KIND_LABELS[k]||k;}
+
+function toggleKindPicker(){
+  document.getElementById('kindWrap').classList.toggle('open');
+}
+document.addEventListener('click',e=>{
+  const w=document.getElementById('kindWrap');
+  if(w&&!w.contains(e.target))w.classList.remove('open');
+});
+
+async function loadKinds(stationId){
+  // Get all distinct doc_kind for this station from table
+  const{data,error}=await sb
+    .from('station_schemas')
+    .select('doc_kind')
+    .eq('station_id',stationId);
+  if(error||!data?.length) return ['topology','zarchim'];
+  const kinds=[...new Set(data.map(r=>r.doc_kind))].sort();
+  // Always ensure topology/zarchim first
+  const ordered=['topology','zarchim',...kinds.filter(k=>k!=='topology'&&k!=='zarchim')];
+  return ordered.filter(k=>kinds.includes(k)||k==='topology'||k==='zarchim').filter((v,i,a)=>a.indexOf(v)===i);
+}
+
+function renderKindDropdown(kinds){
+  const dd=document.getElementById('kindDropdown');
+  dd.innerHTML=kinds.map(k=>`
+    <div class="pdf-item ${currentKind===k?'active':''}" onclick="setKind('${esc(k)}')">
+      ${esc(kindLabel(k))}
+    </div>`).join('');
+}
+
+async function setKind(kind){
+  currentKind=kind;
+  document.getElementById('kindLabel').textContent=kindLabel(kind);
+  document.getElementById('kindWrap').classList.remove('open');
+  if(currentStation) await loadKind(kind);
+}
+
+/* ── Load PDFs for current station + kind ────────────────── */
+async function loadKind(kind){
+  if(!currentStation)return;
+  showLoading();
+  document.getElementById('docInfo').textContent='—';
+  selectedPdf=null;currentPdfs=[];
+  document.getElementById('copyBtn').disabled=true;
+  document.getElementById('dlBtn').disabled=true;
+  document.getElementById('pdfWrap').style.display='none';
+
+  // 1. Try station_schemas table (all rows for this station+kind, no unique constraint assumed)
+  const{data:tableData, error:tableErr}=await sb
+    .from('station_schemas')
+    .select('id,title,file_path,public_url,updated_at')
+    .eq('station_id',currentStation.id)
+    .eq('doc_kind',kind)
+    .order('updated_at',{ascending:false});
+
+  if(!tableErr && tableData && tableData.length>0){
+    currentPdfs=tableData.map(r=>{
+      // Use stored public_url directly — regenerate only if missing
+      let url=r.public_url||null;
+      if(!url && r.file_path){
+        // Strip bucket prefix if present (e.g. "schema_ss/stations/...")
+        const cleanPath=r.file_path.replace(/^schema_ss\//,'');
+        const{data:pub}=sb.storage.from(BUCKET).getPublicUrl(cleanPath);
+        if(pub?.publicUrl) url=pub.publicUrl;
+      }
+      return{
+        name: r.title || (r.file_path||'').split('/').pop(),
+        path: r.file_path,
+        url,
+        updated: r.updated_at
+      };
+    });
+    document.getElementById('stMeta').textContent=`${currentPdfs.length} PDF`;
+    setupPdfPicker(currentPdfs);
+    openPdf(currentPdfs[0]);
+    return;
+  }
+
+  // 2. Fallback: scan storage bucket directly
+  //    Try: stations/{station_id}/{kind}/  and  stations/{station_id}/
+  const pathsToTry=[
+    `stations/${currentStation.id}/${kind}`,
+    `stations/${currentStation.id}`
+  ];
+
+  for(const storagePath of pathsToTry){
+    const{data:storData,error:storErr}=await sb.storage.from(BUCKET).list(storagePath,{
+      limit:200,sortBy:{column:'name',order:'asc'}
+    });
+    if(storErr||!storData) continue;
+
+    // Direct PDFs in this folder
+    let pdfs=storData
+      .filter(x=>x.metadata!=null && (x.name||'').toLowerCase().endsWith('.pdf'))
+      .map(x=>{
+        const p=`${storagePath}/${x.name}`;
+        const{data:pub}=sb.storage.from(BUCKET).getPublicUrl(p);
+        return{name:x.name,path:p,url:pub?.publicUrl||null,updated:x.updated_at||''};
+      });
+
+    // Also check subfolders (topology/zarchim inside root)
+    const subfolders=storData.filter(x=>x.metadata==null && !String(x.name||'').includes('.'));
+    for(const sf of subfolders){
+      if(storagePath.includes(kind) || sf.name===kind || sf.name===kind+'s'){
+        const{data:sd}=await sb.storage.from(BUCKET).list(`${storagePath}/${sf.name}`,{limit:100});
+        if(sd){
+          const more=sd.filter(x=>x.metadata!=null&&(x.name||'').toLowerCase().endsWith('.pdf')).map(x=>{
+            const p=`${storagePath}/${sf.name}/${x.name}`;
+            const{data:pub}=sb.storage.from(BUCKET).getPublicUrl(p);
+            return{name:x.name,path:p,url:pub?.publicUrl||null,updated:x.updated_at||''};
+          });
+          pdfs=[...pdfs,...more];
+        }
+      }
+    }
+
+    if(pdfs.length){
+      currentPdfs=pdfs;
+      document.getElementById('stMeta').textContent=`${pdfs.length} PDF`;
+      setupPdfPicker(pdfs);
+      openPdf(pdfs[pdfs.length-1]);
+      return;
+    }
+  }
+
+  // 3. Nothing found
+  document.getElementById('viewer').innerHTML=`
+    <div class="viewer-hint">
+      📭 <b>${kind==='topology'?'Topology':'Зарчим'}</b> PDF байхгүй байна.<br>
+      <span style="font-size:11px;margin-top:6px;display:block">＋ PDF оруулах дарж нэмж болно.</span>
+    </div>`;
+  document.getElementById('stMeta').textContent='PDF олдсонгүй';
+}
+
+/* ── PDF picker ───────────────────────────────────────────── */
+function setupPdfPicker(pdfs){
+  const wrap=document.getElementById('pdfWrap');
+  const label=document.getElementById('pdfPickLabel');
+  const dropdown=document.getElementById('pdfDropdown');
+
+  if(pdfs.length<=1){
+    wrap.style.display='none';
+    return;
+  }
+  wrap.style.display='flex';
+  label.textContent=`${pdfs.length} PDF`;
+  dropdown.innerHTML=pdfs.map(f=>`
+    <div class="pdf-item ${selectedPdf?.path===f.path?'active':''}"
+         onclick="openPdf({name:'${esc(f.name)}',path:'${esc(f.path)}',url:'${esc(f.url||'')}',updated:'${esc(f.updated||'')}'})"
+         title="${esc(f.name)}">
+      ${esc(f.name)}
+      <div class="pdf-meta">${(f.updated||'').slice(0,10)}</div>
+    </div>`).join('');
+}
+
+function togglePdfPicker(){
+  document.getElementById('pdfWrap').classList.toggle('open');
+}
+document.addEventListener('click',e=>{
+  const wrap=document.getElementById('pdfWrap');
+  if(wrap&&!wrap.contains(e.target)) wrap.classList.remove('open');
+});
+
+/* ── Open PDF ─────────────────────────────────────────────── */
+function openPdf(f){
+  if(!f)return;
+  selectedPdf=f;
+  // refresh picker active state
+  setupPdfPicker(currentPdfs);
+  document.getElementById('pdfWrap').classList.remove('open');
+
+  if(!f.url){
+    document.getElementById('viewer').innerHTML=
+      '<div class="viewer-hint">⚠️ Public URL олдсонгүй. Bucket public эсэхийг шалгана уу.</div>';
+    return;
+  }
+  document.getElementById('viewer').innerHTML=`<iframe src="${esc(f.url)}" title="${esc(f.name)}"></iframe>`;
+  document.getElementById('docInfo').textContent=`📄 ${f.name}${f.updated?' · '+(f.updated||'').slice(0,10):''}`;
+  document.getElementById('copyBtn').disabled=false;
+  document.getElementById('dlBtn').disabled=false;
+}
+
+/* ── Actions ──────────────────────────────────────────────── */
+async function copyCurrentUrl(){
+  if(!selectedPdf?.url)return;
+  try{
+    await navigator.clipboard.writeText(selectedPdf.url);
+    showToast('✅ Link copied');
+  }catch(e){prompt('Copy:',selectedPdf.url);}
+}
+function downloadCurrent(){
+  if(!selectedPdf?.url)return;
+  window.open(selectedPdf.url,'_blank','noopener,noreferrer');
+}
+
+/* ── Upload ───────────────────────────────────────────────── */
+async function uploadPDF(){
+  if(!currentStation)return alert('Эхлээд станцаа сонгоно уу.');
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.pdf,application/pdf';
+  inp.onchange=async()=>{
+    const file=inp.files&&inp.files[0];if(!file)return;
+    const safeName=file.name.replace(/[^\w.\-]+/g,'_');
+    const path=`stations/${currentStation.id}/${currentKind}/${Date.now()}_${safeName}`;
+    try{
+      const{error:upErr}=await sb.storage.from(BUCKET).upload(path,file,{contentType:file.type,upsert:true});
+      if(upErr)throw new Error(upErr.message);
+      const{data:pub}=sb.storage.from(BUCKET).getPublicUrl(path);
+      // Also upsert to station_schemas table
+      await sb.from('station_schemas').upsert({
+        station_id:currentStation.id,
+        doc_kind:currentKind,
+        title:`${currentStation.name} - ${currentKind} - ${file.name}`,
+        file_path:path,
+        public_url:pub?.publicUrl||null,
+        updated_at:new Date().toISOString()
+      },{onConflict:'station_id,doc_kind'});
+      showToast('✅ PDF амжилттай орлоо!');
+      await loadKind(currentKind);
+    }catch(e){alert('❌ '+e.message);}
+  };
+  inp.click();
+}
+
+/* ── Helpers ──────────────────────────────────────────────── */
+function showLoading(){
+  document.getElementById('viewer').innerHTML=
+    '<div class="viewer-hint"><div class="loading-bar" style="margin:auto 0 10px"></div><p>PDF уншиж байна…</p></div>';
+}
+function showToast(msg){
+  const el=document.createElement('div');
+  el.style.cssText='position:fixed;right:14px;bottom:14px;z-index:9999;padding:10px 14px;border:1px solid var(--border);border-radius:14px;background:var(--card2);box-shadow:var(--shadow);color:var(--text);font-weight:800;font-size:13px;';
+  el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),1500);
+}
+function esc(s=''){
+  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+}
+function toggleTheme(){
+  const b=document.body,t=b.getAttribute('data-theme')==='dark'?'light':'dark';
+  b.setAttribute('data-theme',t);try{localStorage.setItem('rha_theme',t)}catch(e){}
+}
+(function(){try{const t=localStorage.getItem('rha_theme');if(t)document.body.setAttribute('data-theme',t)}catch(e){}})();
+</script>
+</body></html>
